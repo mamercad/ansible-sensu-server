@@ -1,0 +1,59 @@
+---
+# tasks file for ansible-sensu-server
+
+- name: selinux permissive
+  selinux: policy=targeted state=permissive
+
+- name: firewalld stopped
+  service: name=firewalld state=stopped enabled=no
+
+- name: install official erlang repo (no files on rhel7)
+  yum: name=http://packages.erlang-solutions.com/erlang-solutions-1.0-1.noarch.rpm state=present
+
+- name: install erlang
+  yum: name=erlang
+
+- name: install rabbitmq signing key
+  rpm_key: key=http://www.rabbitmq.com/rabbitmq-signing-key-public.asc state=present
+
+- name: install rabbitmq
+  yum: name=http://www.rabbitmq.com/releases/rabbitmq-server/v3.6.0/rabbitmq-server-3.6.0-1.noarch.rpm state=present
+
+- name: start and enable rattimq-server
+  service: name=rabbitmq-server state=started enabled=yes
+
+- name: rabbitmqctl add_vhost /sensu
+  shell: rabbitmqctl add_vhost /sensu
+  register: command_result
+  failed_when: command_result.rc != 70
+  changed_when: command_result.rc != 70
+
+- name: install redis
+  yum: name=redis state=present
+
+- name: start and enable redis
+  service: name=redis state=started enabled=yes
+
+- name: deploy sensu.repo
+  copy: src=sensu.repo dest=/etc/yum.repos.d/sensu.repo
+
+- name: install sensu (core)
+  yum: name=sensu state=present
+
+- name: deploy sample config
+  get_url: url=http://sensuapp.org/docs/0.21/files/config.json dest=/etc/sensu/config.json
+
+- name: deploy sample check
+  get_url: url=http://sensuapp.org/docs/0.21/files/check_disk.json dest=/etc/sensu/conf.d/check_disk.json
+
+- name: deploy sample default handler
+  get_url: url=http://sensuapp.org/docs/0.21/files/default_handler.json dest=/etc/sensu/conf.d/default_handler.json
+
+- name: ensure that sensu:sensu owns /etc/sensu
+  file: name=/etc/sensu owner=sensu group=sensu recurse=yes
+
+- name: start and enable sensu-server
+  service: name=sensu-server state=started enabled=yes
+
+- name: start and enable sensu-api
+  service: name=sensu-api state=started enabled=yes
